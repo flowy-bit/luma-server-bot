@@ -21,13 +21,14 @@ const client = new Client({
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent,
         GatewayIntentBits.GuildMembers,
-        GatewayIntentBits.GuildMessageReactions // Requis pour que le bot puisse ajouter des réactions (sondages/suggestions)
+        GatewayIntentBits.GuildMessageReactions
     ]
 });
 
-// --- VARIABLES EN MÉMOIRE ---
+// --- IN-MEMORY VARIABLES ---
 let welcomeChannelId = null;
 let suggestChannelId = null;
+let autoRoleId = null;
 
 // ----------------------------------
 // 1. COMMANDS DEFINITION (ENGLISH & SECURE)
@@ -57,6 +58,12 @@ const commands = [
         .addRoleOption(option => option.setName('role1').setDescription('First role option').setRequired(true))
         .addRoleOption(option => option.setName('role2').setDescription('Second role option').setRequired(false))
         .addRoleOption(option => option.setName('role3').setDescription('Third role option').setRequired(false))
+        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+
+    new SlashCommandBuilder()
+        .setName('setup-autorole')
+        .setDescription('Admin: Set the role automatically given to new members')
+        .addRoleOption(option => option.setName('role').setDescription('The role to give').setRequired(true))
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
     // --- MODERATION & TOOLS ---
@@ -114,9 +121,19 @@ client.once('ready', async () => {
 });
 
 // ----------------------------------
-// EVENT: WELCOME
+// EVENT: WELCOME & AUTO-ROLE
 // ----------------------------------
-client.on('guildMemberAdd', member => {
+client.on('guildMemberAdd', async member => {
+    
+    // 1. Auto-Role System
+    if (autoRoleId) {
+        const role = member.guild.roles.cache.get(autoRoleId);
+        if (role) {
+            await member.roles.add(role).catch(console.error); 
+        }
+    }
+
+    // 2. Welcome Message System
     if (!welcomeChannelId) return;
     const welcomeChannel = member.guild.channels.cache.get(welcomeChannelId);
     if (!welcomeChannel) return;
@@ -127,6 +144,7 @@ client.on('guildMemberAdd', member => {
         .setDescription('Hello and welcome to the server with the different Luma tools, have a great time!')
         .setImage('https://wallpapercave.com/wp/wp7575112.jpg')
         .setThumbnail(member.user.displayAvatarURL({ dynamic: true, size: 256 }));
+        
     welcomeChannel.send({ content: `Hey <@${member.id}>!`, embeds: [welcomeEmbed] });
 });
 
@@ -149,6 +167,10 @@ client.on('interactionCreate', async interaction => {
         else if (commandName === 'setup-suggestions') {
             suggestChannelId = options.getChannel('channel').id;
             await interaction.reply({ content: `✅ Suggestions channel set to <#${suggestChannelId}>.`, ephemeral: true });
+        }
+        else if (commandName === 'setup-autorole') {
+            autoRoleId = options.getRole('role').id;
+            await interaction.reply({ content: `✅ Auto-role set to <@&${autoRoleId}>. New members will get it automatically!`, ephemeral: true });
         }
         else if (commandName === 'setup-ticket') {
             const embed = new EmbedBuilder().setTitle('🎫 Support Tickets').setDescription('Click below to open a ticket.').setColor('#2B2D31');
@@ -177,7 +199,7 @@ client.on('interactionCreate', async interaction => {
             await interaction.reply({ content: '✅ Role menu created.', ephemeral: true });
         }
 
-        // --- NEW FEATURES ---
+        // --- PUBLIC & MODERATION FEATURES ---
         else if (commandName === 'suggest') {
             if (!suggestChannelId) return interaction.reply({ content: '❌ The admin has not set up a suggestion channel yet.', ephemeral: true });
             
@@ -213,12 +235,31 @@ client.on('interactionCreate', async interaction => {
             await msg.react('🅱️');
         }
 
-        // --- UTILITY / MODERATION (Compact) ---
-        else if (commandName === 'help') await interaction.reply({ content: "Commands: `/setup-welcome`, `/setup-ticket`, `/setup-suggestions`, `/setup-roles`, `/poll`, `/suggest`, `/clear`, `/kick`, `/ban`", ephemeral: true });
+        // --- UTILITY / MODERATION ---
+        else if (commandName === 'help') {
+            const helpEmbed = new EmbedBuilder()
+                .setColor('#00FFaa')
+                .setTitle('📜 Bot Command List')
+                .addFields(
+                    { name: '⚙️ Setup (Admin)', value: '`/setup-welcome`, `/setup-ticket`, `/setup-suggestions`, `/setup-roles`, `/setup-autorole`' },
+                    { name: '🛡️ Moderation', value: '`/kick`, `/ban`, `/clear`, `/poll`' },
+                    { name: '🛠️ Utility & Fun', value: '`/help`, `/ping`, `/serverinfo`, `/8ball`, `/suggest`' }
+                );
+            await interaction.reply({ embeds: [helpEmbed], ephemeral: true });
+        }
         else if (commandName === 'ping') await interaction.reply(`🏓 Pong! \`${client.ws.ping}ms\``);
+        else if (commandName === 'serverinfo') await interaction.reply(`📊 **${interaction.guild.name}** has ${interaction.guild.memberCount} members.`);
+        else if (commandName === '8ball') await interaction.reply(`🔮 **Question:** *${options.getString('question')}*\n💬 **Answer:** It is certain.`);
+        
         else if (commandName === 'clear') {
             await interaction.channel.bulkDelete(options.getInteger('amount'), true);
             await interaction.reply({ content: `🗑️ Deleted ${options.getInteger('amount')} messages.`, ephemeral: true });
+        }
+        else if (commandName === 'kick') {
+            await options.getMember('target').kick().then(() => interaction.reply(`🔨 Kicked.`)).catch(() => interaction.reply({ content: 'Failed.', ephemeral: true }));
+        }
+        else if (commandName === 'ban') {
+            await options.getMember('target').ban().then(() => interaction.reply(`🚫 Banned.`)).catch(() => interaction.reply({ content: 'Failed.', ephemeral: true }));
         }
     }
 
@@ -233,7 +274,6 @@ client.on('interactionCreate', async interaction => {
 
             if (!role) return interaction.reply({ content: '❌ Error: Role not found.', ephemeral: true });
 
-            // Toggle logic: S'il a le rôle on lui enlève, sinon on lui donne.
             if (member.roles.cache.has(roleId)) {
                 await member.roles.remove(roleId);
                 await interaction.reply({ content: `➖ Removed the **${role.name}** role.`, ephemeral: true });
