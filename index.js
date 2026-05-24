@@ -31,7 +31,7 @@ let suggestChannelId = null;
 let autoRoleId = null;
 
 // ----------------------------------
-// 1. COMMANDS DEFINITION (ENGLISH & SECURE)
+// 1. COMMANDS DEFINITION (ENGLISH)
 // ----------------------------------
 const commands = [
     // --- ADMIN SETUPS ---
@@ -114,9 +114,9 @@ client.once('ready', async () => {
     const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
     try {
         await rest.put(Routes.applicationCommands(client.user.id), { body: commands });
-        console.log('✅ All (/) commands are ready!');
+        console.log('✅ All (/) commands are ready and pushed to Discord!');
     } catch (error) {
-        console.error(error);
+        console.error('❌ Error pushing commands:', error);
     }
 });
 
@@ -129,7 +129,8 @@ client.on('guildMemberAdd', async member => {
     if (autoRoleId) {
         const role = member.guild.roles.cache.get(autoRoleId);
         if (role) {
-            await member.roles.add(role).catch(console.error); 
+            // Give the role and ignore errors if the bot's role is too low
+            await member.roles.add(role).catch(() => console.log(`Could not give auto-role to ${member.user.tag}`)); 
         }
     }
 
@@ -256,10 +257,10 @@ client.on('interactionCreate', async interaction => {
             await interaction.reply({ content: `🗑️ Deleted ${options.getInteger('amount')} messages.`, ephemeral: true });
         }
         else if (commandName === 'kick') {
-            await options.getMember('target').kick().then(() => interaction.reply(`🔨 Kicked.`)).catch(() => interaction.reply({ content: 'Failed.', ephemeral: true }));
+            await options.getMember('target').kick().then(() => interaction.reply(`🔨 Kicked.`)).catch(() => interaction.reply({ content: 'Failed. Do I have permissions?', ephemeral: true }));
         }
         else if (commandName === 'ban') {
-            await options.getMember('target').ban().then(() => interaction.reply(`🚫 Banned.`)).catch(() => interaction.reply({ content: 'Failed.', ephemeral: true }));
+            await options.getMember('target').ban().then(() => interaction.reply(`🚫 Banned.`)).catch(() => interaction.reply({ content: 'Failed. Do I have permissions?', ephemeral: true }));
         }
     }
 
