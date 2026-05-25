@@ -27,7 +27,6 @@ const client = new Client({
 
 // --- IN-MEMORY VARIABLES ---
 let welcomeChannelId = null;
-let suggestChannelId = null;
 let autoRoleId = null;
 
 // ----------------------------------
@@ -44,12 +43,6 @@ const commands = [
     new SlashCommandBuilder()
         .setName('setup-ticket')
         .setDescription('Admin: Sets up the ticket panel in the current channel')
-        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
-
-    new SlashCommandBuilder()
-        .setName('setup-suggestions')
-        .setDescription('Admin: Set the channel where suggestions will be sent')
-        .addChannelOption(option => option.setName('channel').setDescription('Suggestions channel').addChannelTypes(ChannelType.GuildText).setRequired(true))
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
     new SlashCommandBuilder()
@@ -94,11 +87,6 @@ const commands = [
         .setDefaultMemberPermissions(PermissionFlagsBits.BanMembers),
 
     // --- PUBLIC COMMANDS ---
-    new SlashCommandBuilder()
-        .setName('suggest')
-        .setDescription('Submit a suggestion for the server')
-        .addStringOption(option => option.setName('idea').setDescription('Your suggestion').setRequired(true)),
-
     new SlashCommandBuilder().setName('help').setDescription('Displays a list of all available commands'),
     new SlashCommandBuilder().setName('ping').setDescription('Shows the bot and API latency'),
     new SlashCommandBuilder().setName('serverinfo').setDescription('Displays information about the server'),
@@ -129,7 +117,6 @@ client.on('guildMemberAdd', async member => {
     if (autoRoleId) {
         const role = member.guild.roles.cache.get(autoRoleId);
         if (role) {
-            // Give the role and ignore errors if the bot's role is too low
             await member.roles.add(role).catch(() => console.log(`Could not give auto-role to ${member.user.tag}`)); 
         }
     }
@@ -165,10 +152,6 @@ client.on('interactionCreate', async interaction => {
             welcomeChannelId = options.getChannel('channel').id;
             await interaction.reply({ content: `✅ Welcome channel set to <#${welcomeChannelId}>.`, ephemeral: true });
         }
-        else if (commandName === 'setup-suggestions') {
-            suggestChannelId = options.getChannel('channel').id;
-            await interaction.reply({ content: `✅ Suggestions channel set to <#${suggestChannelId}>.`, ephemeral: true });
-        }
         else if (commandName === 'setup-autorole') {
             autoRoleId = options.getRole('role').id;
             await interaction.reply({ content: `✅ Auto-role set to <@&${autoRoleId}>. New members will get it automatically!`, ephemeral: true });
@@ -201,25 +184,6 @@ client.on('interactionCreate', async interaction => {
         }
 
         // --- PUBLIC & MODERATION FEATURES ---
-        else if (commandName === 'suggest') {
-            if (!suggestChannelId) return interaction.reply({ content: '❌ The admin has not set up a suggestion channel yet.', ephemeral: true });
-            
-            const idea = options.getString('idea');
-            const suggestChannel = interaction.guild.channels.cache.get(suggestChannelId);
-            
-            const embed = new EmbedBuilder()
-                .setAuthor({ name: interaction.user.username, iconURL: interaction.user.displayAvatarURL() })
-                .setTitle('💡 New Suggestion')
-                .setDescription(idea)
-                .setColor('#F1C40F')
-                .setTimestamp();
-
-            const msg = await suggestChannel.send({ embeds: [embed] });
-            await msg.react('✅');
-            await msg.react('❌');
-
-            await interaction.reply({ content: `✅ Your suggestion has been sent to ${suggestChannel}!`, ephemeral: true });
-        }
         else if (commandName === 'poll') {
             const question = options.getString('question');
             const opt1 = options.getString('option1');
@@ -242,9 +206,9 @@ client.on('interactionCreate', async interaction => {
                 .setColor('#00FFaa')
                 .setTitle('📜 Bot Command List')
                 .addFields(
-                    { name: '⚙️ Setup (Admin)', value: '`/setup-welcome`, `/setup-ticket`, `/setup-suggestions`, `/setup-roles`, `/setup-autorole`' },
+                    { name: '⚙️ Setup (Admin)', value: '`/setup-welcome`, `/setup-ticket`, `/setup-roles`, `/setup-autorole`' },
                     { name: '🛡️ Moderation', value: '`/kick`, `/ban`, `/clear`, `/poll`' },
-                    { name: '🛠️ Utility & Fun', value: '`/help`, `/ping`, `/serverinfo`, `/8ball`, `/suggest`' }
+                    { name: '🛠️ Utility & Fun', value: '`/help`, `/ping`, `/serverinfo`, `/8ball`' }
                 );
             await interaction.reply({ embeds: [helpEmbed], ephemeral: true });
         }
